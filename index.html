@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>COMP4422 M1 — Geometry &amp; Camera</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b1020; overflow: hidden; font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  #hud { position: fixed; left: 12px; top: 12px; padding: 10px 12px; color: #d7e3ff; background: rgba(8, 12, 28, .72);
+         border: 1px solid #2b3a6b; border-radius: 8px; white-space: pre; pointer-events: none; }
+  #help { position: fixed; right: 12px; bottom: 12px; padding: 10px 12px; color: #aab8e0; background: rgba(8, 12, 28, .72);
+          border: 1px solid #2b3a6b; border-radius: 8px; white-space: pre; }
+  #help button { font: inherit; margin-top: 6px; }
+  #err { position: fixed; inset: 0; display: none; place-items: center; color: #ffb4b4; background: #1a0b0b; padding: 24px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="help">drag        orbit
+wheel       zoom
+W A S D     move target (Q / E down / up)
+arrows      orbit
+[ ]         field of view
+Z           depth test on/off
+C           back-face culling on/off
+U           UV checker view on/off
+R           reset camera
+drop a .obj file here, or:
+<input type="file" id="file" accept=".obj"></div>
+<div id="err"></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
