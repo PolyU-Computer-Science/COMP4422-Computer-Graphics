@@ -20,6 +20,11 @@ nearArr(M.transformVec4(M.multiply(M.translation(1, 0, 0), M.scaling(2)), [1, 0,
 // inverse
 const A = M.chain(M.translation(1, 2, 3), M.rotationY(0.7), M.rotationX(0.3), M.scaling(2));
 nearArr(M.multiply(A, M.invert(A)), M.identity());
+// normal matrix: under non-uniform scale a transformed normal stays perpendicular to a transformed tangent
+const Sn = M.chain(M.rotationY(0.4), M.scaling(3, 1, 0.5)), Nm = M.normalMatrix(Sn);
+const nrm = V.normalize([1, 1, 0]), tan = [1, -1, 0];
+const nOut = [0, 1, 2].map((r) => Nm[r] * nrm[0] + Nm[3 + r] * nrm[1] + Nm[6 + r] * nrm[2]);
+near(V.dot(nOut, M.transformVec4(Sn, [...tan, 0]).slice(0, 3)), 0);
 // lookAt: eye -> origin, target -> straight ahead on -Z at distance
 const view = M.lookAt([0, 0, 5], [0, 0, 0]);
 nearArr(M.transformVec4(view, [0, 0, 5, 1]), [0, 0, 0, 1]);

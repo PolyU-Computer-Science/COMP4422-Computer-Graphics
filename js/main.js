@@ -20,13 +20,16 @@ const VS = `#version 300 es
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aTexCoord;   // UVs: unused by lighting, used by M2's texture mapping
-uniform mat4 uMVP;     // P * V * M, built on the CPU with our own Mat4
-uniform mat4 uModel;   // only used to rotate normals (fine while scaling is uniform)
-out vec3 vNormal;
+uniform mat4 uMVP;           // P * V * M, built on the CPU with our own Mat4
+uniform mat4 uModel;         // object -> world
+uniform mat3 uNormalMatrix;  // inverse-transpose of uModel (correct under non-uniform scale)
+out vec3 vNormal;            // world-space normal
+out vec3 vWorldPos;          // world-space position (for M3's lighting)
 out vec2 vUV;
 void main() {
   vUV = aTexCoord;
-  vNormal = mat3(uModel) * aNormal;
+  vNormal = uNormalMatrix * aNormal;
+  vWorldPos = (uModel * vec4(aPos, 1.0)).xyz;
   gl_Position = uMVP * vec4(aPos, 1.0);
 }`;
 const FS = `#version 300 es
@@ -50,6 +53,12 @@ try { program = linkProgram(gl, VS, FS); } catch (e) { showError(e.message); thr
 const loc = {
   mvp: gl.getUniformLocation(program, 'uMVP'),
   model: gl.getUniformLocation(program, 'uModel'),
+  normalMatrix: gl.getUniformLocation(program, 'uNormalMatrix'),
+  // Not used by the placeholder shader (location is null, so the uniform calls are no-ops);
+  // set every frame so M2/M3 shaders only have to declare them.
+  view: gl.getUniformLocation(program, 'uView'),
+  proj: gl.getUniformLocation(program, 'uProj'),
+  eyePos: gl.getUniformLocation(program, 'uEyePos'),
   tint: gl.getUniformLocation(program, 'uTint'),
   showUV: gl.getUniformLocation(program, 'uShowUV'),
 };
@@ -152,12 +161,16 @@ function frame(now) {
 
   gl.useProgram(program);
   gl.uniform1i(loc.showUV, state.uv ? 1 : 0);
+  gl.uniformMatrix4fv(loc.view, false, V);
+  gl.uniformMatrix4fv(loc.proj, false, P);
+  gl.uniform3fv(loc.eyePos, camera.eye);                   // world-space camera position
   for (const obj of scene) {
     const mesh = obj.mesh();
     if (!mesh) continue;                                   // .obj still loading
     const M = obj.model(t);
     gl.uniformMatrix4fv(loc.mvp, false, Mat4.multiply(PV, M));   // MVP = P * V * M
     gl.uniformMatrix4fv(loc.model, false, M);
+    gl.uniformMatrix3fv(loc.normalMatrix, false, Mat4.normalMatrix(M));
     gl.uniform3fv(loc.tint, obj.tint);
     mesh.draw(gl);                                         // gl.drawElements inside
   }

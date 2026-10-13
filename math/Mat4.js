@@ -120,6 +120,15 @@ export function invert(a) {
   return out;
 }
 
+// Normal matrix for a model matrix: upper-left 3x3 of the inverse-transpose, as a column-major
+// Float32Array(9) for gl.uniformMatrix3fv.  Keeps normals perpendicular to the surface even
+// under non-uniform scaling.  Falls back to the plain 3x3 if the model matrix is singular.
+export function normalMatrix(model) {
+  const inv = invert(model);
+  const n = inv ? transpose(inv) : model;
+  return new Float32Array([n[0], n[1], n[2], n[4], n[5], n[6], n[8], n[9], n[10]]);
+}
+
 // Transform a point (w=1) or direction (w=0) by M.  Returns [x, y, z, w].
 export function transformVec4(m, v) {
   const out = [0, 0, 0, 0];
