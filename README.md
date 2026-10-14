@@ -149,6 +149,112 @@ Fish Root — position, orientation, and growth scale
 - [ ] Submit the report, slides, and complete runnable source code with the README to Canvas through the designated team member.
 - [ ] Verify that the intended files were uploaded successfully.
 
+## Planned Project Structure
+
+Use a modular layout that follows the milestone responsibilities without creating four separate applications. Keep the shared M1 paths (`math/`, `js/camera.js`, `js/mesh.js`, `js/obj-loader.js`, `js/primitives.js`, and `js/gl-utils.js`) stable, and extend the project around them.
+
+The tree below is a **target layout**, not a list of completed files. New filenames are proposed implementation locations; create them as needed. Keep the project lightweight, and combine small modules when splitting them would add unnecessary complexity. Particle-specific files apply only if the team selects that M4 technique.
+
+```text
+COMP4422-Computer-Graphics/
+├── README.md
+├── index.html                       # Browser entry point
+├── package.json                     # ES module configuration
+├── math/                            # Member A: shared mathematics
+│   ├── Vec3.js
+│   └── Mat4.js
+├── js/
+│   ├── main.js                      # Startup, wiring, and one animation loop
+│   ├── camera.js                    # Member A: camera and player-follow behaviour
+│   ├── input.js                     # A + C: shared keyboard/mouse input
+│   ├── mesh.js                      # Member A: VAO/VBO/EBO and indexed drawing
+│   ├── obj-loader.js                # Member A: OBJ parsing and loading
+│   ├── primitives.js                # Member A: procedural meshes
+│   ├── gl-utils.js                  # Shared shader compilation/linking utilities
+│   ├── rendering/
+│   │   ├── renderer.js              # Shared draw orchestration and uniforms
+│   │   ├── textures.js              # Member B: image loading and texture upload
+│   │   └── lighting.js              # Member C: light/material data and uniforms
+│   ├── animation/
+│   │   └── fish-animation.js        # Member B: tail/fin local animation values
+│   ├── scene/
+│   │   ├── scene-node.js            # Member C: hierarchy and local/world transforms
+│   │   └── underwater-scene.js      # Member C: assemble fish and scenery
+│   ├── game/
+│   │   ├── fish.js                  # Member C: fish state and visual-node references
+│   │   ├── player.js                # Member C: movement from shared input
+│   │   ├── fish-population.js       # Member C: other fish creation and basic movement
+│   │   ├── collision.js             # Member C: collision queries
+│   │   └── eating-growth.js         # Member C: eating rules and growth updates
+│   └── effects/
+│       └── bubble-particles.js      # Member D: candidate M4 effect
+├── shaders/                         # GLSL ES 3.00 sources
+│   ├── scene.vert                   # Member B: vertex transforms and varyings
+│   ├── scene.frag                   # B: texturing; C: Blinn–Phong lighting
+│   ├── particles.vert               # Member D: candidate particle shader
+│   └── particles.frag               # Member D: candidate particle shader
+├── assets/
+│   ├── knot.obj                     # Geometry demo asset; retain its loading path
+│   ├── models/                     # Member B: exported runtime meshes
+│   │   ├── fish/                    # Body, tail, and fins; agreed attachment data
+│   │   └── environment/             # Corals, rocks, and other agreed scenery
+│   ├── textures/                    # Images used by the game
+│   │   ├── fish/
+│   │   └── environment/
+│   └── source/                      # Editable modelling files, separate from runtime assets
+├── tools/
+│   └── gen_knot.py                  # Geometry demo asset generator
+├── test-math.js                     # Keep the documented root-level test command
+├── test-prims.mjs                   # Keep the documented root-level test command
+├── tests/                          # Proposed additional logic tests
+│   ├── scene-graph.test.mjs         # Parent-child transforms and growth scaling
+│   └── gameplay.test.mjs            # Collision, eating, and growth rules
+└── docs/                            # Working documents and submission materials
+    ├── design.md                    # Agreed controls, rules, and asset conventions
+    ├── report/
+    ├── slides/
+    └── screenshots/
+```
+
+### Module Ownership and Boundaries
+
+| Area | Lead | Planned responsibility |
+|---|---|---|
+| Math, mesh loading, and camera | Member A | Maintain shared math/mesh APIs and camera behaviour. The camera receives the player's position; it does not implement eating or growth. |
+| Assets, texturing, and animation | Member B | Prepare meshes/UVs/textures, implement scene shaders and swimming animation values, and document fish-part attachment points. |
+| Scene, lighting, and gameplay | Member C | Build the scene graph, apply animation values to its nodes, implement lighting and player/fish rules, and keep visual and collision sizes consistent. |
+| Additional graphics effect | Member D | Implement the selected CG effect in `js/effects/` with any dedicated shaders, using the shared camera and frame timing. |
+| Startup and rendering integration | Shared; agree changes with affected owners | Keep `js/main.js` focused on startup and frame scheduling. Put draw setup in `rendering/renderer.js`; use the shared mesh and shader utilities rather than rewriting them. |
+
+**Shared editing points:** `js/main.js`, `js/input.js`, `js/rendering/renderer.js`, and `shaders/scene.frag` need coordinated changes. In particular, Member B's texture sampling and Member C's lighting should form one compatible scene shader rather than separate replacements that overwrite each other.
+
+### Planned Frame Flow
+
+`js/main.js` owns one `requestAnimationFrame` loop. Other modules expose update/draw operations and must not start their own competing loops.
+
+```text
+Read shared input and frame delta
+  → Update player and other fish positions
+  → Resolve collisions, eating, and growth
+  → Calculate and apply local tail/fin animation
+  → Update scene-graph world transforms
+  → Update the follow camera from the player's world position
+  → Update the selected graphics effect
+  → Render the scene and then any transparent effects
+```
+
+Keep GPU mesh data separate from per-fish state so several fish can share geometry while retaining independent transforms and sizes. The scene graph owns world-transform composition; animations modify local transforms, and gameplay modifies the fish root's position, orientation, and growth scale. If the selected effect changes blending or depth-write settings, restore those settings before the next scene draw.
+
+### Structure Setup Checklist
+
+- [ ] Confirm the proposed module boundaries and shared input/camera contract.
+- [ ] Keep the M1 import paths, demo asset path, and root-level test commands working during integration.
+- [ ] Introduce the scene, game, animation, and rendering modules as their features are implemented; do not move everything at once.
+- [ ] Move scene shader sources into `shaders/` when adding M2/M3 rendering, and load/compile them during startup before the first draw.
+- [ ] Store runtime OBJ/texture files separately from editable modelling sources and record part origins/attachment data.
+- [ ] Add the selected M4 effect under `js/effects/` and connect it to the shared loop and camera.
+- [ ] Add scene-graph/gameplay tests and keep report, slides, and screenshots under `docs/`.
+
 ## Run Locally
 
 Run from the repository root using a local HTTP server so ES modules and OBJ fetching work correctly.
@@ -250,29 +356,3 @@ UVs use `v = 0` at the bottom edge. Follow the image-upload convention used by t
 ```js
 gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 ```
-
-### Code Organization
-
-| Path | Responsibility |
-|---|---|
-| `index.html` | Browser entry point |
-| `math/Vec3.js`, `math/Mat4.js` | Shared vector and matrix operations |
-| `js/main.js` | Rendering, input, and scene integration |
-| `js/camera.js` | Camera logic |
-| `js/mesh.js` | GPU mesh buffers and indexed drawing |
-| `js/obj-loader.js` | OBJ parsing and loading |
-| `js/primitives.js` | Procedural primitive meshes |
-| `js/gl-utils.js` | Shader/program utilities |
-| `assets/` | Project assets |
-| `tools/gen_knot.py` | Generator for the placeholder `assets/knot.obj` |
-| `test-math.js`, `test-prims.mjs` | Math, parser, and primitive tests |
-
-Keep these shared interfaces stable when adding models, textures, scene-graph logic, gameplay, and effects.
-
-## Collaboration and Credits
-
-Work on focused branches and review changes before merging. Agree on interface changes before editing another member's integration points. Keep `main` runnable and update task checkboxes only after checking the work.
-
-Record sources for models, textures, references, and external code. Declare AI assistance in the final report, and ensure every member can explain the graphics techniques they personally implement.
-
-**Documentation assistance:** ChatGPT was used to help organize this README and its task checklists. Each member should separately record any assistance used for their implementation.
