@@ -90,13 +90,24 @@ addEventListener('drop', (e) => { e.preventDefault(); loadFile(e.dataTransfer.fi
 
 // Each object = mesh + a function building its model matrix at time t (seconds).
 const T = Mat4.translation, S = Mat4.scaling, RX = Mat4.rotationX, RY = Mat4.rotationY, mul = Mat4.chain;
+const FLOOR_Y = -2;   // below the lowest point any object reaches (rotating cube corner ≈ -1.73)
+
+// Placeholder "swimmer" for the follow camera: circles the scene at radius 6, bobbing up and down.
+// Forward is its local +Z; heading h means forward = (sin h, 0, cos h).  M3 replaces it with the player.
+function swimmer(t) {
+  const w = 0.35 * t;
+  return { pos: [6 * Math.sin(w), 0.8 + 0.3 * Math.sin(2 * w), 6 * Math.cos(w)], heading: w + Math.PI / 2 };
+}
+
 const scene = [
-  { mesh: () => meshes.floor, tint: [0.25, 0.4, 0.55], model: () => T(0, -1.2, 0) },
+  { mesh: () => meshes.floor, tint: [0.25, 0.4, 0.55], model: () => T(0, FLOOR_Y, 0) },
   { mesh: () => meshes.cube,  tint: [0.9, 0.5, 0.3],  model: (t) => mul(T(-3, 0, 0), RY(t * 0.6), RX(t * 0.3)) },
   { mesh: () => meshes.sphere, tint: [0.4, 0.8, 0.6], model: (t) => mul(T(3, 0, 0), S(1.1)) },
   // torus and sphere interpenetrate: only a correct depth test draws this properly
   { mesh: () => meshes.torus, tint: [0.9, 0.8, 0.3],  model: (t) => mul(T(3, 0, 0), RX(Math.PI / 2 + 0.5 * Math.sin(t)), S(1.3)) },
   { mesh: () => objMesh,      tint: [0.7, 0.5, 0.9],  model: (t) => mul(T(0, 0.3, 0), RY(t * 0.4), S(1.7)) },
+  // stretched sphere = the swimmer, long axis along its forward (+Z)
+  { mesh: () => meshes.sphere, tint: [0.95, 0.6, 0.2], model: (t) => { const s = swimmer(t); return mul(T(...s.pos), RY(s.heading), S(0.35, 0.3, 0.8)); } },
 ];
 
 // ---------- camera & input ----------
@@ -120,16 +131,22 @@ addEventListener('keydown', (e) => {
   else if (k === 'c') state.cull = !state.cull;
   else if (k === 'u') state.uv = !state.uv;               // UV checker debug view
   else if (k === 'r') camera.reset();
+  else if (k === 'f') {                                    // third-person follow on/off
+    camera.mode = camera.mode === 'follow' ? 'orbit' : 'follow';
+    if (camera.mode === 'follow') { camera.yawOffset = 0; camera.distance = 5; camera.pitch = 0.3; }
+  }
   else if (k === '[') camera.fovy = Math.max(0.3, camera.fovy - 0.05);
   else if (k === ']') camera.fovy = Math.min(2.2, camera.fovy + 0.05);
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
 
-function updateCamera(dt) {
+function updateCamera(dt, t) {
   const v = 4 * dt, k = (n) => (keys.has(n) ? 1 : 0);
-  camera.pan((k('d') - k('a')) * v, (k('w') - k('s')) * v, (k('e') - k('q')) * v);
+  if (camera.mode === 'follow') { const s = swimmer(t); camera.follow(s.pos, s.heading, dt); }
+  else camera.pan((k('d') - k('a')) * v, (k('w') - k('s')) * v, (k('e') - k('q')) * v);
   camera.orbit((k('arrowleft') - k('arrowright')) * 1.5 * dt, (k('arrowup') - k('arrowdown')) * 1.5 * dt);
+  camera.keepAbove(FLOOR_Y + 0.2);                         // never look at the floor from underneath
 }
 
 // ---------- render loop ----------
@@ -144,7 +161,7 @@ const fmt = (a) => a.map((x) => x.toFixed(2)).join(', ');
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.1), t = now / 1000;
   last = now;
-  updateCamera(dt);
+  updateCamera(dt, t);
   resize();
   gl.viewport(0, 0, canvas.width, canvas.height);
 
@@ -177,6 +194,7 @@ function frame(now) {
 
   hud.textContent =
     `COMP4422 M1 · geometry & camera\n` +
+    `camera  ${camera.mode}\n` +
     `eye     ${fmt(camera.eye)}\ntarget  ${fmt(camera.target)}\n` +
     `fov ${(camera.fovy * 180 / Math.PI).toFixed(0)}°  near ${camera.near}  far ${camera.far}\n` +
     `depth test: ${state.depth ? 'ON' : 'OFF'}   culling: ${state.cull ? 'ON' : 'OFF'}   uv view: ${state.uv ? 'ON' : 'OFF'}\n` +

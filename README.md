@@ -9,6 +9,7 @@ Optional tests (Node 18+):
 
     node test-math.js              # Vec3 / Mat4 / OBJ parser
     node test-prims.mjs            # primitives: UV counts and triangle winding
+    node test-camera.mjs           # follow camera ends up behind its subject; camera stays above the floor
 
 | M1 requirement | Where |
 |---|---|
@@ -17,9 +18,13 @@ Optional tests (Node 18+):
 | Loaded .obj | `js/obj-loader.js` + `assets/knot.obj` (drop any .obj onto the page) |
 | Model–view–projection, perspective camera | `js/main.js` (`P·V·M` on CPU → `uMVP`), `Mat4.lookAt`, `Mat4.perspective` |
 | Depth test on | `gl.enable(DEPTH_TEST)` + depth cleared each frame; `Z` toggles it to show why it matters |
-| Controllable camera | `js/camera.js` orbit camera: drag, wheel, WASD/QE, arrows, `[` `]` FOV, `R` reset |
+| Controllable camera | `js/camera.js` orbit camera: drag, wheel, WASD/QE, arrows, `[` `]` FOV, `R` reset; `F` third-person follow |
 
-Keys: `Z` depth test, `C` back-face culling, `U` UV checker view, `R` reset.
+Keys: `F` follow camera, `Z` depth test, `C` back-face culling, `U` UV checker view, `R` reset.
+
+Follow mode tracks a placeholder swimmer (`swimmer(t)` in `js/main.js`). To follow the real player, call
+`camera.follow(position, heading, dt)` each frame, where `heading` is the yaw of the player's forward direction
+(forward = `(sin h, 0, cos h)`). Dragging still orbits around the player; the camera stays above the floor.
 
 ## Conventions for M2 / M3 / M4
 
