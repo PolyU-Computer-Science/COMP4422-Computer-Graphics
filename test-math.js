@@ -9,6 +9,13 @@ const nearArr = (a, b, e = 1e-5) => a.forEach((x, i) => near(x, b[i], e));
 
 nearArr(V.cross([1, 0, 0], [0, 1, 0]), [0, 0, 1]);
 near(V.length(V.normalize([3, 4, 0])), 1);
+
+// distance: 3-4-5 triangle, symmetric, zero to itself
+near(V.distance([0, 0, 0], [3, 4, 0]), 5);
+const pa = [1, 2, 3], pb = [-4, 0, 5];
+near(V.distance(pa, pb), V.distance(pb, pa));
+near(V.distance(pa, pa), 0);
+
 // translation moves points (w=1) but not directions (w=0)
 nearArr(M.transformVec4(M.translation(1, 2, 3), [1, 2, 3, 1]), [2, 4, 6, 1]);
 nearArr(M.transformVec4(M.translation(1, 2, 3), [1, 2, 3, 0]), [1, 2, 3, 0]);
