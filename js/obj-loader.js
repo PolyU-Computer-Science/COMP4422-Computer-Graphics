@@ -7,7 +7,7 @@
 // de-duplicates, which is what makes the result an indexed mesh instead of a triangle soup.
 import { makeIndices } from './mesh.js';
 
-export function parseOBJ(text, { normalize = true } = {}) {
+export function parseOBJ(text, { normalize = false } = {}) {
   const P = [], N = [], UV = [];          // raw lists from the file
   const pos = [], nor = [], uvs = [], idx = [];   // output (GPU) arrays
   const cache = new Map();                 // "vi/ti/ni" -> GPU vertex index

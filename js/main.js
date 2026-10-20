@@ -80,7 +80,7 @@ async function setOBJ(dataPromise, name) {
     objName = `${name} (${objMesh.vertexCount} verts, ${objMesh.indexCount / 3} tris)`;
   } catch (e) { objName = 'OBJ error: ' + e.message; console.error(e); }
 }
-setOBJ(loadOBJ('assets/knot.obj'), 'knot.obj');
+setOBJ(loadOBJ('assets/knot.obj', { normalize: true }), 'knot.obj');
 
 // load another .obj via the file picker or drag-and-drop
 const loadFile = (f) => f && f.text().then((t) => setOBJ(Promise.resolve().then(() => parseOBJ(t)), f.name));

@@ -352,9 +352,9 @@ Use `vNormal` and `vWorldPos` in world space, plus `vUV`, when passing data betw
 
 ### OBJ and Texture Handoff
 
-`parseOBJ` and `loadOBJ` recenter each model and scale it to fit a unit sphere by default. Pass `{ normalize: false }` when preserving authored coordinates is necessary.
+`parseOBJ` and `loadOBJ` preserve authored vertex coordinates, origins, and scale by default (`{ normalize: false }`). Pass `{ normalize: true }` only when loading standalone demo or test meshes (such as `assets/knot.obj`) that should be automatically recentered and scaled to fit a unit sphere.
 
-For separately exported fish parts, agree on units, origins, joint positions, and local transforms. Do not independently normalize parts when their authored relative dimensions or positions must be preserved.
+For separately exported fish parts and environment props, agree on units, origins, joint positions, and local transforms so their authored relative dimensions and pivot points are preserved directly on load.
 
 UVs use `v = 0` at the bottom edge. Follow the image-upload convention used by the project:
 
