@@ -69,11 +69,11 @@ Each owner should update their checkboxes after implementing and verifying the c
 - [ ] Create low-poly fish models for the player and other fish.
 - [ ] Prepare the agreed low-poly scenery, including corals and rocks.
 - [ ] Prepare separate fish body, tail, and fin geometry with agreed origins, scale, and attachment points.
-- [ ] Create UV coordinates and apply an image texture to at least one mesh.
-- [ ] Implement GLSL ES 3.00 vertex and fragment shaders using the shared vertex and uniform conventions.
-- [ ] Use `requestAnimationFrame` to drive the animation loop.
-- [ ] Implement swimming animations and coordinate tail/fin transforms with Member C's scene graph.
-- [ ] Share OBJ files, textures, and export conventions with the team early enough for integration.
+- [x] Create UV coordinates and apply an image texture to at least one mesh.
+- [x] Implement GLSL ES 3.00 vertex and fragment shaders using the shared vertex and uniform conventions.
+- [x] Use `requestAnimationFrame` to drive the animation loop.
+- [x] Implement swimming animations and coordinate tail/fin transforms with Member C's scene graph.
+- [x] Share OBJ files, textures, and export conventions with the team early enough for integration.
 - [ ] Verify shaders, texture mapping, and animation, then record a narrated milestone video of up to three minutes.
 
 **Handoff:** Member B leads modelling, UVs, texturing, and animation. Other members can help prepare scenery to keep the workload manageable. Agree on shader inputs with Member A and on lighting/scene-graph integration with Member C.
@@ -175,7 +175,7 @@ COMP4422-Computer-Graphics/
 │   │   ├── renderer.js              # Shared draw orchestration and uniforms
 │   │   ├── textures.js              # Member B: image loading and texture upload
 │   │   └── lighting.js              # Member C: light/material data and uniforms
-│   ├── animation/
+│   ├── animations/
 │   │   └── fish-animation.js        # Member B: tail/fin local animation values
 │   ├── scene/
 │   │   ├── scene-node.js            # Member C: hierarchy and local/world transforms
@@ -329,6 +329,8 @@ Meshes use interleaved vertex data with a **32-byte stride**:
 
 Meshes without UV coordinates receive `(0, 0)`. Triangles wind counter-clockwise when viewed from outside.
 
+---
+
 ### Matrices and Shaders
 
 Matrices use column-major `Float32Array(16)` storage, with translation at indices 12–14. `Mat4.multiply(a, b)` means `a * b`, so `b` is applied first. Upload matrices without transposing:
@@ -350,6 +352,8 @@ Keep the shared uniform contract consistent across M2, M3, and M4:
 
 Use `vNormal` and `vWorldPos` in world space, plus `vUV`, when passing data between vertex and fragment shaders. A shader only needs to declare the uniforms it uses.
 
+---
+
 ### OBJ and Texture Handoff
 
 `parseOBJ` and `loadOBJ` preserve authored vertex coordinates, origins, and scale by default (`{ normalize: false }`). Pass `{ normalize: true }` only when loading standalone demo or test meshes (such as `assets/knot.obj`) that should be automatically recentered and scaled to fit a unit sphere.
@@ -360,4 +364,93 @@ UVs use `v = 0` at the bottom edge. Follow the image-upload convention used by t
 
 ```js
 gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+```
+
+---
+
+### OBJ Loading & Coordinate Conventions (`js/obj-loader.js`)
+
+`parseOBJ` and `loadOBJ` preserve authored vertex coordinates, pivot origins, and relative dimensions by default (`{ normalize: false }`)[cite: 1]:
+* **Game Assets (Fish Parts & Environment Props):** Loaded with the default `{ normalize: false }` so Blockbench hinge points at `(0, 0, 0)` and relative part scales are preserved directly on load.
+* **Standalone Demo Meshes:** Pass `{ normalize: true }` explicitly when loading standalone test meshes that need automatic recentering and unit-sphere scaling (e.g., `loadOBJ('assets/knot.obj', { normalize: true })`)[cite: 1].
+
+---
+
+### External Shader Pipeline (`shaders/scene.vert` & `shaders/scene.frag`)
+
+Scene shaders are loaded asynchronously at startup in `js/main.js` using `fetch` and `Promise.all` before entering the render loop[cite: 1].
+
+* **Vertex Shader (`shaders/scene.vert`):**
+   * Transforms vertex positions via `uMVP` and world coordinates via `uModel`.
+   * Transforms vertex normals via the inverse-transpose matrix `uNormalMatrix` (`Mat4.normalMatrix(M)`) so lighting remains accurate even when fish models are dynamically scaled[cite: 1].
+   * Passes `vUV`, `vNormal`, and `vWorldPos` to the fragment stage.
+* **Fragment Shader (`shaders/scene.frag`):**
+   * Supports both textured models (`uUseTex = true`, sampling `uTex` modulated by `uTint`) and untextured geometry (`uUseTex = false`, falling back to `uTint` and normal-based shading)[cite: 1].
+   * **Alpha Cutout (`discard`):** Unpainted/transparent `.png` pixels (`texSample.a < 0.1`) are discarded in the fragment shader so cutouts (such as dorsal and pectoral fins) do not render black or write invisible geometry into the depth buffer[cite: 3].
+   * **UV Debug Mode:** Pressing `U` toggles `uShowUV`, rendering an $8 \times 8$ procedural UV checkerboard across all meshes[cite: 1].
+
+---
+
+### Texture Management (`js/rendering/textures.js`)
+
+`loadTexture(gl, url, { pixelated = true })` manages WebGL2 `TEXTURE_2D` creation and image uploading:
+* Initializes a $1 \times 1$ white placeholder pixel immediately so rendering can proceed while images download asynchronously.
+* Uploads images with `gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)` to match OBJ UV coordinates (`v = 0` at the bottom edge).
+* **Pixel-Art Filtering (`pixelated: true`):** Uses `gl.NEAREST` for both `gl.TEXTURE_MIN_FILTER` and `gl.TEXTURE_MAG_FILTER` to keep Blockbench pixel-art textures crisp and prevent transparent border pixels from bleeding dark fringes across mipmap levels.
+* **Smooth Filtering (`pixelated: false`):** Uses `gl.LINEAR_MIPMAP_LINEAR` and `gl.LINEAR` for smooth high-resolution textures.
+
+---
+
+### Fish Part Hierarchy, Scaling, and Animation (`js/animation/fish-animation.js`)
+
+Multi-part fish models (`body`, `tail`, `leftFin`, `rightFin`) follow a shared hierarchy and coordinate contract:
+
+```text
+Fish Root — world position, heading orientation, and uniform growth scale
+├── Body      — local counter-yaw
+├── Tail      — local swimming yaw around front hinge
+├── Left Fin  — local flapping roll + resting sweep angle
+└── Right Fin — mirrored flapping roll + resting sweep angle
+```
+
+1. **Orientation & Local Pivots:**
+   * All fish parts are authored facing **`+Z` (forward)**, with **`+Y` up**, **`+X` left**, and **`-X` right**[cite: 1].
+   * Each child part (`tail`, `leftFin`, `rightFin`) is exported with its hinge joint resting at local `(0, 0, 0)`.
+2. **Transform Composition & Dynamic Fish Growth:**
+   * The **Fish Root** matrix applies world translation, heading rotation, and uniform fish scale (`0.4` to `1.2+`)[cite: 1]:
+     $$\mathbf{M}_{\text{root}} = \mathbf{T}(\text{pos}) \cdot \mathbf{R}_y(\text{heading}) \cdot \mathbf{S}(\text{scale})$$
+   * `getFishPartMatrices(profile, t, speedMultiplier, phase)` computes each part's local matrix $\mathbf{M}_{\text{part}} = \mathbf{T}(\text{attachment}) \cdot \mathbf{R}(\theta(t))$.
+   * Multiplying $\mathbf{M}_{\text{world, part}} = \mathbf{M}_{\text{root}} \cdot \mathbf{M}_{\text{part}}$ rotates each part around its local `(0, 0, 0)` hinge first, translates it to its body attachment offset, and scales both the geometry and attachment offsets proportionally when `scale` changes.
+3. **Species Motion Profiles (`FISH_PROFILES`):**
+   * Configures per-species oscillation frequency (`freq`), amplitudes (`tailAmp`, `bodyAmp`, `finAmp`, `finSweep`), and local part attachment coordinates (`attachments`).
+   * Individual fish instances pass their own `speedMultiplier` and `phase` offset so multiple fish of the same species do not swim in lockstep.
+
+---
+
+### Fish Species Catalog (`js/game/fish-catalog.js`)
+
+To keep `js/main.js` focused on startup and frame scheduling, all fish assets are indexed in `js/game/fish-catalog.js`[cite: 1]:
+* **`FISH_SPECIES`:** Declarative registry mapping each species key (e.g., `'tuna'`) to its texture path (`textureUrl`), part OBJ paths (`partUrls`), animation profile (`animProfile`), and `defaultScale`.
+* **`loadFishCatalog(gl)`:** Loads all species textures and part meshes in parallel at startup so multiple fish instances share the same GPU buffers[cite: 1].
+* **`createFishDrawables(catalog, speciesKey, getFishState)`:** Generates drawable scene entries for all parts of a fish instance and binds its world-transform callback (`getFishState(t) -> { pos, heading, scale, speed, phase }`)[cite: 1].
+
+#### Adding a New Fish Species
+1. Place the exported `.obj` part files under `assets/` and the `.png` texture under `assets/`.
+2. Add or reuse an animation profile in `FISH_PROFILES` (`js/animation/fish-animation.js`).
+3. Add a new species entry to `FISH_SPECIES` in `js/game/fish-catalog.js`:
+
+```js
+clownfish: {
+  name: 'Clownfish',
+  textureUrl: 'assets/textures/fish/clownfish.png',
+  partUrls: {
+    body:     'assets/models/fish/clown_body.obj',
+    tail:     'assets/models/fish/clown_tail.obj',
+    leftFin:  'assets/models/fish/clown_fin_l.obj',
+    rightFin: 'assets/models/fish/clown_fin_r.obj',
+  },
+  normalizeParts: false,
+  animProfile: FISH_PROFILES.tuna,
+  defaultScale: 0.6,
+}
 ```

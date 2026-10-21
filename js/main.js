@@ -8,6 +8,7 @@ import { Mesh } from './mesh.js';
 import { cube, sphere, torus, plane } from './primitives.js';
 import { loadOBJ, parseOBJ } from './obj-loader.js';
 import { OrbitCamera } from './camera.js';
+import { loadFishCatalog, createFishDrawables } from './game/fish-catalog.js';
 
 const canvas = document.getElementById('c');
 const hud = document.getElementById('hud');
@@ -15,41 +16,21 @@ const gl = canvas.getContext('webgl2', { antialias: true });
 if (!gl) { showError('WebGL2 is not available in this browser.'); throw new Error('no webgl2'); }
 function showError(msg) { const e = document.getElementById('err'); e.style.display = 'grid'; e.textContent = msg; }
 
-// ---------- shaders (deliberately minimal: M2 owns the real shaders) ----------
-const VS = `#version 300 es
-layout(location = 0) in vec3 aPos;
-layout(location = 1) in vec3 aNormal;
-layout(location = 2) in vec2 aTexCoord;   // UVs: unused by lighting, used by M2's texture mapping
-uniform mat4 uMVP;           // P * V * M, built on the CPU with our own Mat4
-uniform mat4 uModel;         // object -> world
-uniform mat3 uNormalMatrix;  // inverse-transpose of uModel (correct under non-uniform scale)
-out vec3 vNormal;            // world-space normal
-out vec3 vWorldPos;          // world-space position (for M3's lighting)
-out vec2 vUV;
-void main() {
-  vUV = aTexCoord;
-  vNormal = uNormalMatrix * aNormal;
-  vWorldPos = (uModel * vec4(aPos, 1.0)).xyz;
-  gl_Position = uMVP * vec4(aPos, 1.0);
-}`;
-const FS = `#version 300 es
-precision highp float;
-in vec3 vNormal;
-in vec2 vUV;
-uniform vec3 uTint;
-uniform bool uShowUV;   // debug view: checkerboard from UVs, to verify every mesh has sane UVs
-out vec4 outColor;
-void main() {
-  vec3 n = normalize(vNormal);
-  vec3 col = mix(uTint, n * 0.5 + 0.5, 0.55);   // "normal colours" so shape is visible without lighting
-  if (uShowUV) {
-    vec2 c = floor(vUV * 8.0);
-    col = mix(vec3(0.15), vec3(0.95), mod(c.x + c.y, 2.0));
-  }
-  outColor = vec4(col, 1.0);
-}`;
+// ---------- shaders (M2: loaded from shaders/scene.vert & shaders/scene.frag) ----------
 let program;
-try { program = linkProgram(gl, VS, FS); } catch (e) { showError(e.message); throw e; }
+try {
+  const [vsRes, fsRes] = await Promise.all([
+    fetch('shaders/scene.vert'),
+    fetch('shaders/scene.frag'),
+  ]);
+  if (!vsRes.ok) throw new Error(`Could not load shaders/scene.vert (${vsRes.status})`);
+  if (!fsRes.ok) throw new Error(`Could not load shaders/scene.frag (${fsRes.status})`);
+  const [VS, FS] = await Promise.all([vsRes.text(), fsRes.text()]);
+  program = linkProgram(gl, VS, FS);
+} catch (e) {
+  showError(e.message);
+  throw e;
+}
 const loc = {
   mvp: gl.getUniformLocation(program, 'uMVP'),
   model: gl.getUniformLocation(program, 'uModel'),
@@ -61,6 +42,8 @@ const loc = {
   eyePos: gl.getUniformLocation(program, 'uEyePos'),
   tint: gl.getUniformLocation(program, 'uTint'),
   showUV: gl.getUniformLocation(program, 'uShowUV'),
+  useTex: gl.getUniformLocation(program, 'uUseTex'),
+  tex: gl.getUniformLocation(program, 'uTex'),
 };
 
 // ---------- meshes & scene ----------
@@ -81,6 +64,7 @@ async function setOBJ(dataPromise, name) {
   } catch (e) { objName = 'OBJ error: ' + e.message; console.error(e); }
 }
 setOBJ(loadOBJ('assets/knot.obj', { normalize: true }), 'knot.obj');
+const fishCatalog = await loadFishCatalog(gl);
 
 // load another .obj via the file picker or drag-and-drop
 const loadFile = (f) => f && f.text().then((t) => setOBJ(Promise.resolve().then(() => parseOBJ(t)), f.name));
@@ -106,8 +90,8 @@ const scene = [
   // torus and sphere interpenetrate: only a correct depth test draws this properly
   { mesh: () => meshes.torus, tint: [0.9, 0.8, 0.3],  model: (t) => mul(T(3, 0, 0), RX(Math.PI / 2 + 0.5 * Math.sin(t)), S(1.3)) },
   { mesh: () => objMesh,      tint: [0.7, 0.5, 0.9],  model: (t) => mul(T(0, 0.3, 0), RY(t * 0.4), S(1.7)) },
-  // stretched sphere = the swimmer, long axis along its forward (+Z)
-  { mesh: () => meshes.sphere, tint: [0.95, 0.6, 0.2], model: (t) => { const s = swimmer(t); return mul(T(...s.pos), RY(s.heading), S(0.35, 0.3, 0.8)); } },
+  // fish model
+        ...createFishDrawables(fishCatalog, 'tuna', (t) => ({ ...swimmer(t), scale: 1.0, speed: 1.2, phase: 0 })),
 ];
 
 // ---------- camera & input ----------
@@ -189,7 +173,15 @@ function frame(now) {
     gl.uniformMatrix4fv(loc.model, false, M);
     gl.uniformMatrix3fv(loc.normalMatrix, false, Mat4.normalMatrix(M));
     gl.uniform3fv(loc.tint, obj.tint);
-    mesh.draw(gl);                                         // gl.drawElements inside
+    if (obj.tex) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, obj.tex);
+      gl.uniform1i(loc.tex, 0);
+      gl.uniform1i(loc.useTex, 1);
+    } else {
+      gl.uniform1i(loc.useTex, 0);
+    }
+    mesh.draw(gl);                                      // gl.drawElements inside
   }
 
   hud.textContent =
