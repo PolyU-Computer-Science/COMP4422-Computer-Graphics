@@ -17,18 +17,19 @@ void main() {
     vec3 lightDir = normalize(vec3(0.4, 0.8, 0.5));
     float diff = max(dot(n, lightDir), 0.0);
 
-    vec3 col;
+    vec3 baseColor = uTint;
     float alpha = 1.0;
 
     if (uUseTex) {
         vec4 texSample = texture(uTex, vUV);
         // Discard unpainted / transparent pixels so they don't render black or block the z-buffer
         if (texSample.a < 0.1) discard;
-        col = (texSample.rgb * uTint) * (0.45 + 0.55 * diff);
+        baseColor = texSample.rgb * uTint;
         alpha = texSample.a;
-    } else {
-        col = mix(uTint, n * 0.5 + 0.5, 0.55);
     }
+
+    // Apply directional shading to both textured and pure-color untextured models
+    vec3 col = baseColor * (0.45 + 0.55 * diff);
 
     if (uShowUV) {
         vec2 c = floor(vUV * 8.0);

@@ -370,24 +370,26 @@ gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
 ### OBJ Loading & Coordinate Conventions (`js/obj-loader.js`)
 
-`parseOBJ` and `loadOBJ` preserve authored vertex coordinates, pivot origins, and relative dimensions by default (`{ normalize: false }`)[cite: 1]:
+`parseOBJ` and `loadOBJ` preserve authored vertex coordinates, pivot origins, and relative dimensions by default (`{ normalize: false }`):
 * **Game Assets (Fish Parts & Environment Props):** Loaded with the default `{ normalize: false }` so Blockbench hinge points at `(0, 0, 0)` and relative part scales are preserved directly on load.
-* **Standalone Demo Meshes:** Pass `{ normalize: true }` explicitly when loading standalone test meshes that need automatic recentering and unit-sphere scaling (e.g., `loadOBJ('assets/knot.obj', { normalize: true })`)[cite: 1].
+* **Standalone Demo Meshes:** Pass `{ normalize: true }` explicitly when loading standalone test meshes that need automatic recentering and unit-sphere scaling (e.g., `loadOBJ('assets/knot.obj', { normalize: true })`).
 
 ---
 
-### External Shader Pipeline (`shaders/scene.vert` & `shaders/scene.frag`)
+### 3. External Shader Pipeline (`shaders/scene.vert` & `shaders/scene.frag`)
 
-Scene shaders are loaded asynchronously at startup in `js/main.js` using `fetch` and `Promise.all` before entering the render loop[cite: 1].
+Scene shaders are loaded asynchronously at startup in `js/main.js` using `fetch` and `Promise.all` before entering the render loop.
 
 * **Vertex Shader (`shaders/scene.vert`):**
-   * Transforms vertex positions via `uMVP` and world coordinates via `uModel`.
-   * Transforms vertex normals via the inverse-transpose matrix `uNormalMatrix` (`Mat4.normalMatrix(M)`) so lighting remains accurate even when fish models are dynamically scaled[cite: 1].
-   * Passes `vUV`, `vNormal`, and `vWorldPos` to the fragment stage.
+    * Transforms vertex positions via `uMVP` and world coordinates via `uModel`.
+    * Transforms vertex normals via the inverse-transpose matrix `uNormalMatrix` (`Mat4.normalMatrix(M)`) so lighting remains accurate even when fish models are dynamically scaled.
+    * Passes `vUV`, `vNormal`, and `vWorldPos` to the fragment stage.
 * **Fragment Shader (`shaders/scene.frag`):**
-   * Supports both textured models (`uUseTex = true`, sampling `uTex` modulated by `uTint`) and untextured geometry (`uUseTex = false`, falling back to `uTint` and normal-based shading)[cite: 1].
-   * **Alpha Cutout (`discard`):** Unpainted/transparent `.png` pixels (`texSample.a < 0.1`) are discarded in the fragment shader so cutouts (such as dorsal and pectoral fins) do not render black or write invisible geometry into the depth buffer[cite: 3].
-   * **UV Debug Mode:** Pressing `U` toggles `uShowUV`, rendering an $8 \times 8$ procedural UV checkerboard across all meshes[cite: 1].
+    * Uses a unified directional shading model (`baseColor * (0.45 + 0.55 * diff)`) across both textured and untextured geometry, deprecating M1's rainbow normal-color fallback.
+    * **Textured Models (`uUseTex = true`):** Samples `uTex` and multiplies by `uTint` (`texSample.rgb * uTint`). Setting `tint: [1, 1, 1]` preserves the exact PNG colors, while custom tints allow easy color variations of a shared texture.
+    * **Solid-Color Props (`uUseTex = false`):** Uses pure `uTint` as `baseColor` so untextured props (rocks, coral, seabed floor) render in their exact solid RGB color with directional 3D shading.
+    * **Alpha Cutout (`discard`):** Unpainted/transparent `.png` pixels (`texSample.a < 0.1`) are discarded in the fragment shader so cutouts (such as dorsal and pectoral fins) do not render black or write invisible geometry into the depth buffer.
+    * **UV Debug Mode:** Pressing `U` toggles `uShowUV`, rendering an $8 \times 8$ procedural UV checkerboard across all meshes.
 
 ---
 
@@ -414,10 +416,10 @@ Fish Root — world position, heading orientation, and uniform growth scale
 ```
 
 1. **Orientation & Local Pivots:**
-   * All fish parts are authored facing **`+Z` (forward)**, with **`+Y` up**, **`+X` left**, and **`-X` right**[cite: 1].
+   * All fish parts are authored facing **`+Z` (forward)**, with **`+Y` up**, **`+X` left**, and **`-X` right**.
    * Each child part (`tail`, `leftFin`, `rightFin`) is exported with its hinge joint resting at local `(0, 0, 0)`.
 2. **Transform Composition & Dynamic Fish Growth:**
-   * The **Fish Root** matrix applies world translation, heading rotation, and uniform fish scale (`0.4` to `1.2+`)[cite: 1]:
+   * The **Fish Root** matrix applies world translation, heading rotation, and uniform fish scale (`0.4` to `1.2+`):
      $$\mathbf{M}_{\text{root}} = \mathbf{T}(\text{pos}) \cdot \mathbf{R}_y(\text{heading}) \cdot \mathbf{S}(\text{scale})$$
    * `getFishPartMatrices(profile, t, speedMultiplier, phase)` computes each part's local matrix $\mathbf{M}_{\text{part}} = \mathbf{T}(\text{attachment}) \cdot \mathbf{R}(\theta(t))$.
    * Multiplying $\mathbf{M}_{\text{world, part}} = \mathbf{M}_{\text{root}} \cdot \mathbf{M}_{\text{part}}$ rotates each part around its local `(0, 0, 0)` hinge first, translates it to its body attachment offset, and scales both the geometry and attachment offsets proportionally when `scale` changes.
@@ -429,10 +431,10 @@ Fish Root — world position, heading orientation, and uniform growth scale
 
 ### Fish Species Catalog (`js/game/fish-catalog.js`)
 
-To keep `js/main.js` focused on startup and frame scheduling, all fish assets are indexed in `js/game/fish-catalog.js`[cite: 1]:
+To keep `js/main.js` focused on startup and frame scheduling, all fish assets are indexed in `js/game/fish-catalog.js`:
 * **`FISH_SPECIES`:** Declarative registry mapping each species key (e.g., `'tuna'`) to its texture path (`textureUrl`), part OBJ paths (`partUrls`), animation profile (`animProfile`), and `defaultScale`.
-* **`loadFishCatalog(gl)`:** Loads all species textures and part meshes in parallel at startup so multiple fish instances share the same GPU buffers[cite: 1].
-* **`createFishDrawables(catalog, speciesKey, getFishState)`:** Generates drawable scene entries for all parts of a fish instance and binds its world-transform callback (`getFishState(t) -> { pos, heading, scale, speed, phase }`)[cite: 1].
+* **`loadFishCatalog(gl)`:** Loads all species textures and part meshes in parallel at startup so multiple fish instances share the same GPU buffers.
+* **`createFishDrawables(catalog, speciesKey, getFishState)`:** Generates drawable scene entries for all parts of a fish instance and binds its world-transform callback (`getFishState(t) -> { pos, heading, scale, speed, phase }`).
 
 #### Adding a New Fish Species
 1. Place the exported `.obj` part files under `assets/` and the `.png` texture under `assets/`.
